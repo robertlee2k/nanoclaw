@@ -42,6 +42,7 @@ export class WhatsAppChannel implements Channel {
   private outgoingQueue: Array<{ jid: string; text: string }> = [];
   private flushing = false;
   private groupSyncTimerStarted = false;
+  private keepaliveTimer: NodeJS.Timeout | null = null;
 
   private opts: WhatsAppChannelOpts;
 
@@ -77,6 +78,11 @@ export class WhatsAppChannel implements Channel {
       printQRInTerminal: false,
       logger,
       browser: Browsers.macOS('Chrome'),
+      // WebSocket keepalive settings for proxy compatibility
+      keepAliveIntervalMs: 15000, // Send keepalive ping every 15 seconds
+      connectTimeoutMs: 60000,    // 60 second connection timeout
+      defaultQueryTimeoutMs: 60000, // 60 second query timeout
+      emitOwnEvents: true,
     });
 
     this.sock.ev.on('connection.update', (update) => {
@@ -130,6 +136,9 @@ export class WhatsAppChannel implements Channel {
           logger.warn({ err }, 'Failed to send presence update');
         });
 
+        // Start keepalive ping to prevent proxy/WebSocket timeout
+        this.startKeepalive();
+
         // Build LID to phone mapping from auth state for self-chat translation
         if (this.sock.user) {
           const phoneUser = this.sock.user.id.split(':')[0];
@@ -170,10 +179,28 @@ export class WhatsAppChannel implements Channel {
     this.sock.ev.on('creds.update', saveCreds);
 
     this.sock.ev.on('messages.upsert', async ({ messages }) => {
+      logger.info({ count: messages.length }, 'DEBUG: messages.upsert received');
       for (const msg of messages) {
-        if (!msg.message) continue;
+        if (!msg.message) {
+          logger.info('DEBUG: skipping message - no msg.message');
+          continue;
+        }
         const rawJid = msg.key.remoteJid;
-        if (!rawJid || rawJid === 'status@broadcast') continue;
+        logger.info({ rawJid, msgType: Object.keys(msg.message || {}) }, 'DEBUG: processing message');
+        // 详细调试：打印 msg.message 的完整结构
+        logger.info({
+          rawJid,
+          messageKeys: Object.keys(msg.message || {}),
+          conversation: msg.message?.conversation,
+          extendedTextMessage: msg.message?.extendedTextMessage,
+          hasImageMessage: !!msg.message?.imageMessage,
+          hasVideoMessage: !!msg.message?.videoMessage,
+          messageContextInfo: msg.message?.messageContextInfo,
+        }, 'DEBUG: msg.message structure');
+        if (!rawJid || rawJid === 'status@broadcast') {
+          logger.info({ rawJid }, 'DEBUG: skipping message - invalid jid');
+          continue;
+        }
 
         // Translate LID JID to phone JID if applicable
         const chatJid = await this.translateJid(rawJid);
@@ -192,9 +219,17 @@ export class WhatsAppChannel implements Channel {
           isGroup,
         );
 
-        // Only deliver full message for registered groups
+        // Only deliver full message for registered groups OR if from me (user's own messages)
         const groups = this.opts.registeredGroups();
-        if (groups[chatJid]) {
+        const fromMe = msg.key.fromMe || false;
+        const isRegisteredGroup = !!groups[chatJid];
+        logger.info({ chatJid, groupsKeys: Object.keys(groups), hasGroup: isRegisteredGroup, fromMe }, 'DEBUG: checking registered groups');
+
+        // Process message if: 1) in registered group, OR 2) from me (user's own message)
+        // Note: fromMe messages use the chat's JID for lookup, not necessarily a registered group
+        if (isRegisteredGroup || fromMe) {
+          const groupName = groups[chatJid]?.name || chatJid;
+          logger.info({ chatJid, groupName, fromMe }, 'DEBUG: processing content');
           const content =
             msg.message?.conversation ||
             msg.message?.extendedTextMessage?.text ||
@@ -202,13 +237,18 @@ export class WhatsAppChannel implements Channel {
             msg.message?.videoMessage?.caption ||
             '';
 
+          logger.info({ content, contentLength: content.length }, 'DEBUG: extracted content');
           // Skip protocol messages with no text content (encryption keys, read receipts, etc.)
-          if (!content) continue;
+          if (!content) {
+            logger.info('DEBUG: skipping message - empty content');
+            continue;
+          }
 
           const sender = msg.key.participant || msg.key.remoteJid || '';
           const senderName = msg.pushName || sender.split('@')[0];
 
-          const fromMe = msg.key.fromMe || false;
+          // Note: fromMe was defined earlier in the outer scope at line 224
+
           // Detect bot messages: with own number, fromMe is reliable
           // since only the bot sends from that number.
           // With shared number, bot messages carry the assistant name prefix
@@ -272,7 +312,43 @@ export class WhatsAppChannel implements Channel {
 
   async disconnect(): Promise<void> {
     this.connected = false;
+    this.stopKeepalive();
     this.sock?.end(undefined);
+  }
+
+  /**
+   * Start keepalive ping to prevent proxy/WebSocket timeout.
+   * Sends presence update every 20 seconds to keep connection alive.
+   */
+  private startKeepalive(): void {
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+    }
+
+    logger.info('Starting keepalive ping (every 20s)');
+
+    this.keepaliveTimer = setInterval(() => {
+      if (!this.connected || !this.sock) {
+        logger.debug('Skipping keepalive - not connected');
+        return;
+      }
+
+      // Send presence update to keep connection alive
+      this.sock.sendPresenceUpdate('available').catch((err) => {
+        logger.warn({ err }, 'Keepalive ping failed');
+      });
+    }, 20000); // Every 20 seconds
+  }
+
+  /**
+   * Stop keepalive ping timer.
+   */
+  private stopKeepalive(): void {
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+      logger.info('Stopped keepalive ping');
+    }
   }
 
   async setTyping(jid: string, isTyping: boolean): Promise<void> {

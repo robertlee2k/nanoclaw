@@ -363,7 +363,9 @@ async function startMessageLoop(): Promise<void> {
 
         for (const [chatJid, groupMessages] of messagesByGroup) {
           const group = registeredGroups[chatJid];
-          if (!group) continue;
+          // Allow processing if: 1) group is registered, OR 2) messages are from me (user's own messages)
+          const hasFromMeMessage = groupMessages.some((m) => m.is_from_me);
+          if (!group && !hasFromMeMessage) continue;
 
           const channel = findChannel(channels, chatJid);
           if (!channel) {
@@ -371,8 +373,10 @@ async function startMessageLoop(): Promise<void> {
             continue;
           }
 
-          const isMainGroup = group.folder === MAIN_GROUP_FOLDER;
-          const needsTrigger = !isMainGroup && group.requiresTrigger !== false;
+          // Handle the case where group may not be registered but message is from me
+          const isMainGroup = group ? group.folder === MAIN_GROUP_FOLDER : false;
+          const requiresTrigger = group ? group.requiresTrigger !== false : false;
+          const needsTrigger = !isMainGroup && requiresTrigger;
 
           // For non-main groups, only act on trigger messages.
           // Non-trigger messages accumulate in DB and get pulled as
