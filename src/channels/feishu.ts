@@ -117,6 +117,68 @@ export class FeishuChannel implements Channel {
     }
   }
 
+  /**
+   * Upload image to Feishu and get image_key
+   */
+  private async uploadImage(imageBuffer: Buffer): Promise<string> {
+    if (!this.httpClient) {
+      throw new Error('Feishu client not connected');
+    }
+
+    try {
+      const response = await this.httpClient.im.v1.image.create({
+        data: {
+          image_type: 'message', // 'message' = 消息图片(临时3天有效)
+          image: imageBuffer,
+        },
+      });
+
+      const imageKey = (response as any).data?.image_key;
+      if (!imageKey) {
+        throw new Error('No image_key returned from Feishu');
+      }
+
+      logger.info({ imageKey: imageKey.slice(0, 20) + '...' }, 'Image uploaded to Feishu');
+      return imageKey;
+    } catch (err) {
+      logger.error({ err }, 'Failed to upload image to Feishu');
+      throw err;
+    }
+  }
+
+  /**
+   * Send image message to a chat
+   */
+  async sendImage(jid: string, imageBuffer: Buffer): Promise<void> {
+    if (!this.httpClient || !this.connected) {
+      logger.warn('Cannot send image: Feishu client not connected');
+      return;
+    }
+
+    try {
+      const chatId = jid.replace(/^feishu:/, '');
+
+      // 1. Upload image to get image_key
+      const imageKey = await this.uploadImage(imageBuffer);
+
+      // 2. Send image message
+      await this.httpClient.im.v1.message.create({
+        params: {
+          receive_id_type: 'chat_id',
+        },
+        data: {
+          receive_id: chatId,
+          msg_type: 'image',
+          content: JSON.stringify({ image_key: imageKey }),
+        },
+      });
+
+      logger.info({ jid, imageKey: imageKey.slice(0, 20) + '...' }, 'Feishu image sent');
+    } catch (err) {
+      logger.error({ jid, err }, 'Failed to send Feishu image');
+    }
+  }
+
   isConnected(): boolean {
     return this.connected && this.wsClient !== null && this.httpClient !== null;
   }

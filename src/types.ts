@@ -87,6 +87,8 @@ export interface Channel {
   disconnect(): Promise<void>;
   // Optional: typing indicator. Channels that support it implement it.
   setTyping?(jid: string, isTyping: boolean): Promise<void>;
+  // Optional: send image. Channels that support media (Feishu) implement it.
+  sendImage?(jid: string, imageBuffer: Buffer): Promise<void>;
 }
 
 // Callback type that channels use to deliver inbound messages

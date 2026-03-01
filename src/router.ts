@@ -43,3 +43,16 @@ export function findChannel(
 ): Channel | undefined {
   return channels.find((c) => c.ownsJid(jid));
 }
+
+export async function routeOutboundImage(
+  channels: Channel[],
+  jid: string,
+  imageBuffer: Buffer,
+): Promise<void> {
+  const channel = channels.find((c) => c.ownsJid(jid) && c.isConnected());
+  if (!channel) throw new Error(`No channel for JID: ${jid}`);
+  if (!channel.sendImage) {
+    throw new Error(`Channel ${channel.name} does not support sending images`);
+  }
+  return channel.sendImage(jid, imageBuffer);
+}

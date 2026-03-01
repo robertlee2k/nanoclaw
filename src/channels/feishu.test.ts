@@ -23,6 +23,14 @@ const mockClient = {
       message: {
         create: vi.fn().mockResolvedValue({ code: 0 }),
       },
+      image: {
+        create: vi.fn().mockResolvedValue({
+          code: 0,
+          data: {
+            image_key: 'img_v2_abc123def456',
+          },
+        }),
+      },
     },
   },
   bot: {
@@ -201,6 +209,59 @@ describe('FeishuChannel', () => {
       await channel.sendMessage('feishu:oc_123', 'Hello');
 
       // No error should be thrown
+      expect(mockClient.im.v1.message.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- sendImage (image sending tests) ---
+
+  describe('sendImage', () => {
+    it('uploads and sends image when connected', async () => {
+      const opts = createTestOpts();
+      const channel = new FeishuChannel(
+        { appId: 'test_app_id', appSecret: 'test_app_secret' },
+        opts,
+      );
+
+      await channel.connect();
+
+      const imageBuffer = Buffer.from('fake-image-data');
+      await channel.sendImage('feishu:oc_123', imageBuffer);
+
+      // Verify image upload was called
+      expect(mockClient.im.v1.image.create).toHaveBeenCalledWith({
+        data: {
+          image_type: 'message',
+        },
+        file: imageBuffer,
+      });
+
+      // Verify message creation was called with image_key
+      expect(mockClient.im.v1.message.create).toHaveBeenCalledWith({
+        params: {
+          receive_id_type: 'chat_id',
+        },
+        data: {
+          receive_id: 'oc_123',
+          msg_type: 'image',
+          content: JSON.stringify({ image_key: 'img_v2_abc123def456' }),
+        },
+      });
+    });
+
+    it('does nothing when not connected', async () => {
+      const opts = createTestOpts();
+      const channel = new FeishuChannel(
+        { appId: 'test_app_id', appSecret: 'test_app_secret' },
+        opts,
+      );
+
+      // Don't connect
+      const imageBuffer = Buffer.from('fake-image-data');
+      await channel.sendImage('feishu:oc_123', imageBuffer);
+
+      // No error should be thrown, no API calls made
+      expect(mockClient.im.v1.image.create).not.toHaveBeenCalled();
       expect(mockClient.im.v1.message.create).not.toHaveBeenCalled();
     });
   });
