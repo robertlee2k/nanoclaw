@@ -1,5 +1,5 @@
 skill: feishu
-version: 1.0.0
+version: 1.1.0
 description: "Feishu (Lark) Bot integration via official Node.js SDK with WebSocket long connection"
 core_version: 0.1.0
 adds:
@@ -19,3 +19,18 @@ structured:
 conflicts: []
 depends: []
 test: "npx vitest run src/channels/feishu.test.ts"
+
+# Scripts and utilities
+scripts:
+  - scripts/register-feishu-chat.ts
+  - scripts/migrate-whatsapp-to-feishu.ts
+
+# Documentation
+documentation:
+  - SKILL.md
+  - MIGRATION.md
+  - QUICKSTART.md
+
+# Examples and patterns
+examples:
+  - examples/auto-register.ts

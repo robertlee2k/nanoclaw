@@ -66,12 +66,21 @@ export class FeishuChannel implements Channel {
       });
 
       // 4. Start WebSocket connection with event handler
+      // 使用 register 方法注册事件处理器
+      const eventDispatcher = new (lark as any).EventDispatcher({
+        useVerificationToken: false,  // 使用长连接模式不需要验证 token
+      });
+
+      // 注册消息接收事件处理器 - 使用 register 方法
+      eventDispatcher.register({
+        'im.message.receive_v1': async (data: any) => {
+          logger.info('Received im.message.receive_v1 event');
+          await this.handleMessageEvent(data);
+        },
+      });
+
       await (this.wsClient as any).start({
-        eventDispatcher: new (lark as any).EventDispatcher({}).register({
-          'im.message.receive_v1': async (data: any) => {
-            await this.handleMessageEvent(data);
-          },
-        }),
+        eventDispatcher,
       });
 
       this.connected = true;
@@ -143,34 +152,55 @@ export class FeishuChannel implements Channel {
   private async handleMessageEvent(
     data: any,
   ): Promise<void> {
-    const { message, sender } = data;
+    // 根据 Python 代码和官方 sample，消息数据在 data.event 中
+    // 数据结构: data.event.message, data.event.sender
+    const eventData = data.event || data;
+    // 注意：message 和 sender 在 eventData.event 下，不是直接在 eventData 下
+    const { message, sender } = eventData.event || eventData;
+
+    logger.info('Received Feishu message event');
+    logger.info(`DEBUG: data.event = ${JSON.stringify(data?.event, null, 2)?.substring(0, 500)}`);
 
     if (!message || !sender) {
-      logger.debug('Missing message or sender in event');
+      logger.warn('Missing message or sender in event');
+      logger.warn(`Full data: ${JSON.stringify(data, null, 2)?.substring(0, 2000)}`);
+      logger.warn(`Event data keys: ${Object.keys(eventData || {}).join(', ')}`);
       return;
     }
 
     const chatId = message.chat_id;
-    const userId = sender.sender_id?.user_id;
+    // 飞书新版API可能返回null的user_id，使用open_id作为备用
+    const userId = sender.sender_id?.user_id || sender.sender_id?.open_id;
+
+    logger.info({ chatId, userId }, 'Parsed Feishu message');
 
     if (!chatId || !userId) {
-      logger.debug('Missing chat_id or user_id');
+      logger.warn('Missing chat_id or user_id');
+      logger.warn(`Message: ${JSON.stringify(message)}`);
+      logger.warn(`Sender: ${JSON.stringify(sender)}`);
       return;
     }
 
     // Build JID
     const chatJid = `feishu:${chatId}`;
+    logger.info(`DEBUG: Built chatJid = ${chatJid}`);
+
     const timestamp = new Date(parseInt(message.create_time || '0')).toISOString();
 
     // Parse message content
     let content = '';
+    logger.info(`DEBUG: message.message_type = ${message.message_type}, has content = ${!!message.content}`);
     if (message.message_type === 'text' && message.content) {
       try {
         const contentObj = JSON.parse(message.content);
         content = contentObj.text || '';
-      } catch {
+        logger.info(`DEBUG: Parsed content = "${content}"`);
+      } catch (e) {
         content = message.content;
+        logger.info(`DEBUG: Failed to parse JSON, using raw content`);
       }
+    } else {
+      logger.info(`DEBUG: Skipping content parsing - not text message or no content`);
     }
 
     // Check if bot was mentioned
@@ -178,6 +208,7 @@ export class FeishuChannel implements Channel {
     const isBotMentioned = this.botUserId
       ? mentions.some((m: any) => m.id?.user_id === this.botUserId)
       : false;
+    logger.info(`DEBUG: isBotMentioned = ${isBotMentioned}`);
 
     if (isBotMentioned) {
       // Remove @bot text
@@ -189,15 +220,21 @@ export class FeishuChannel implements Channel {
       }
     }
 
+    logger.info(`DEBUG: Final content = "${content}"`);
+
     // Store chat metadata
     this.opts.onChatMetadata(chatJid, timestamp, `User ${userId}`, 'feishu', false);
 
     // Check if registered
-    const group = this.opts.registeredGroups()[chatJid];
+    logger.info(`DEBUG: Checking if chat ${chatJid} is registered`);
+    const groups = this.opts.registeredGroups();
+    logger.info(`DEBUG: Available groups: ${Object.keys(groups).join(', ') || '(none)'}`);
+    const group = groups[chatJid];
     if (!group) {
-      logger.debug({ chatJid }, 'Message from unregistered Feishu chat');
+      logger.warn({ chatJid }, 'Message from unregistered Feishu chat - IGNORING');
       return;
     }
+    logger.info(`DEBUG: Group found, proceeding with message delivery`);
 
     // Deliver message
     this.opts.onMessage(chatJid, {

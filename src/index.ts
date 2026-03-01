@@ -483,9 +483,23 @@ async function main(): Promise<void> {
   };
 
   // Create and connect channels
-  whatsapp = new WhatsAppChannel(channelOpts);
-  channels.push(whatsapp);
-  await whatsapp.connect();
+
+  // Feishu (Lark) channel
+  if (FEISHU_APP_ID && FEISHU_APP_SECRET) {
+    const feishuChannel = new FeishuChannel(
+      { appId: FEISHU_APP_ID, appSecret: FEISHU_APP_SECRET },
+      channelOpts,
+    );
+    channels.push(feishuChannel);
+    await feishuChannel.connect();
+  }
+
+  // WhatsApp channel (unless Feishu-only mode)
+  if (!FEISHU_ONLY) {
+    whatsapp = new WhatsAppChannel(channelOpts);
+    channels.push(whatsapp);
+    await whatsapp.connect();
+  }
 
   // Start subsystems (independently of connection handler)
   startSchedulerLoop({

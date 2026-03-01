@@ -1,0 +1,199 @@
+{
+  "nodes": [
+    {
+      "id": "a1b2c3d4e5f67890",
+      "type": "text",
+      "x": 400,
+      "y": -200,
+      "width": 500,
+      "height": 120,
+      "text": "# NanoClaw：Skills协议驱动的AI Agent架构革新\n\n**核心洞察**：从\"代码库膨胀\"走向\"按需自修改\"",
+      "color": "1"
+    },
+    {
+      "id": "b2c3d4e5f6789012",
+      "type": "group",
+      "x": -100,
+      "y": 0,
+      "width": 350,
+      "height": 280,
+      "label": "一、引言：信任问题",
+      "color": "2"
+    },
+    {
+      "id": "c3d4e5f678901234",
+      "type": "text",
+      "x": -80,
+      "y": 30,
+      "width": 310,
+      "height": 230,
+      "text": "## 对比：OpenClaw vs NanoClaw\n\n**OpenClaw**：\n- 50万行代码\n- 53个配置文件\n- 70+ 依赖\n\n**NanoClaw**：\n- ~500行核心代码\n- Skills协议扩展\n- 容器隔离安全"
+    },
+    {
+      "id": "d4e5f67890123456",
+      "type": "group",
+      "x": 350,
+      "y": 50,
+      "width": 600,
+      "height": 450,
+      "label": "二、核心架构",
+      "color": "3"
+    },
+    {
+      "id": "e5f6789012345678",
+      "type": "text",
+      "x": 370,
+      "y": 80,
+      "width": 260,
+      "height": 190,
+      "text": "### 1. 容器隔离\n\n**核心假设**：所有外部输入都不可信\n\n- 每次Agent调用创建新Linux容器\n- 显式挂载 + 最小权限\n- 物理级安全隔离",
+      "color": "4"
+    },
+    {
+      "id": "f678901234567890",
+      "type": "text",
+      "x": 650,
+      "y": 80,
+      "width": 280,
+      "height": 200,
+      "text": "### 2. 异步消息循环\n\n```\nWhatsApp -> SQLite -> Polling -> Container -> Response\n```\n\n**关键设计**：\n- 立即advance cursor\n- Cursor分离（已读 vs 已处理）\n- Crash Recovery",
+      "color": "4"
+    },
+    {
+      "id": "6789012345678901",
+      "type": "text",
+      "x": 370,
+      "y": 290,
+      "width": 560,
+      "height": 190,
+      "text": "### 3. Issue #30的教训\n\n**事故**：芬兰语提醒 → 32秒内21条重复消息 → 上下文丢失\n\n**根本原因**：`query()` 未设置 `maxTurns` 参数\n\n**修复**：`options: { maxTurns: 10 }`\n\n> ⚠️ **工程教训**：在不确定的模型推理中，必须在代码层面强制施加确定性的安全终止条件。永远不要假设AI会自己知道何时停止。",
+      "color": "1"
+    },
+    {
+      "id": "7890123456789012",
+      "type": "group",
+      "x": -100,
+      "y": 320,
+      "width": 420,
+      "height": 380,
+      "label": "三、Skills协议",
+      "color": "5"
+    },
+    {
+      "id": "8901234567890123",
+      "type": "text",
+      "x": -80,
+      "y": 350,
+      "width": 380,
+      "height": 140,
+      "text": "### 核心宣言\n\n> \"Don't add features. Add skills.\"\n\n从\"提交PR\"到\"执行Skill\"\n从\"共享代码\"到\"共享知识\"\n从\"通用框架\"到\"专用定制\"",
+      "color": "5"
+    },
+    {
+      "id": "9012345678901234",
+      "type": "text",
+      "x": -80,
+      "y": 500,
+      "width": 380,
+      "height": 180,
+      "text": "### Skill是什么？\n\n**不是**：\n- 可执行的二进制插件\n- 传统\"插件\"\n\n**是**：\n- 自然语言编写的专家指令\n- 指导Claude Code的\"菜谱\"\n- 声明式代码生成规范",
+      "color": "5"
+    },
+    {
+      "id": "0123456789012345",
+      "type": "group",
+      "x": 350,
+      "y": 540,
+      "width": 600,
+      "height": 280,
+      "label": "四、实践建议",
+      "color": "6"
+    },
+    {
+      "id": "1234567890123456",
+      "type": "text",
+      "x": 370,
+      "y": 570,
+      "width": 560,
+      "height": 230,
+      "text": "### 渐进式采用策略\n\n**阶段1：实验（1-2个月）**\n- 1-2个最常用的定制需求\n- 小范围测试\n\n**阶段2：验证（3-6个月）**\n- 扩展Skill库覆盖主要场景\n- 建立编写规范\n\n**阶段3：全面采用（6-12个月）**\n- 所有新功能通过Skill实现\n- 冻结原有扩展系统",
+      "color": "6"
+    },
+    {
+      "id": "2345678901234567",
+      "type": "text",
+      "x": 0,
+      "y": 720,
+      "width": 950,
+      "height": 180,
+      "text": "## 核心洞察总结\n\n| 维度 | 传统模式 | NanoClaw模式 |\n|------|---------|-------------|\n| **安全** | 应用层权限假设 | 物理级容器隔离 |\n| **扩展** | 代码库膨胀 | Skills按需自修改 |\n| **协作** | 提交PR | 执行Skill |\n| **所有权** | 通用框架 | 专用定制代码库 |\n\n> **最终思考**：在AI能够理解并修改代码的时代，软件的功能不再是被预先编写好的，而是根据需要实时生成的。程序员的职责正从\"编写代码\"转变为\"编写生成代码的指令（Skills）\"。",
+      "color": "1"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1a2b3c4d5e6f789",
+      "fromNode": "a1b2c3d4e5f67890",
+      "fromSide": "bottom",
+      "toNode": "b2c3d4e5f6789012",
+      "toSide": "top",
+      "toEnd": "arrow"
+    },
+    {
+      "id": "e2b3c4d5e6f78901",
+      "fromNode": "a1b2c3d4e5f67890",
+      "fromSide": "bottom",
+      "toNode": "d4e5f67890123456",
+      "toSide": "top",
+      "toEnd": "arrow"
+    },
+    {
+      "id": "e3c4d5e6f7890123",
+      "fromNode": "b2c3d4e5f6789012",
+      "fromSide": "right",
+      "toNode": "d4e5f67890123456",
+      "toSide": "left",
+      "toEnd": "arrow"
+    },
+    {
+      "id": "e4d5e6f789012345",
+      "fromNode": "d4e5f67890123456",
+      "fromSide": "left",
+      "toNode": "7890123456789012",
+      "toSide": "top",
+      "toEnd": "arrow"
+    },
+    {
+      "id": "e5f6f78901234567",
+      "fromNode": "7890123456789012",
+      "fromSide": "bottom",
+      "toNode": "0123456789012345",
+      "toSide": "left",
+      "toEnd": "arrow"
+    },
+    {
+      "id": "e6f7890123456789",
+      "fromNode": "d4e5f67890123456",
+      "fromSide": "bottom",
+      "toNode": "0123456789012345",
+      "toSide": "top",
+      "toEnd": "arrow"
+    },
+    {
+      "id": "e7f8901234567890",
+      "fromNode": "0123456789012345",
+      "fromSide": "bottom",
+      "toNode": "2345678901234567",
+      "toSide": "top",
+      "toEnd": "arrow"
+    },
+    {
+      "id": "e8f9012345678901",
+      "fromNode": "7890123456789012",
+      "fromSide": "bottom",
+      "toNode": "2345678901234567",
+      "toSide": "top",
+      "toEnd": "arrow"
+    }
+  ]
+}
