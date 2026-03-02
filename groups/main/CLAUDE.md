@@ -199,6 +199,42 @@ Read `/workspace/project/data/registered_groups.json` and format it nicely.
 
 ---
 
+## Sending Messages and Images
+
+### Sending Text Messages
+
+To send a text message to a chat, create a JSON file in `/workspace/ipc/outbox/`:
+
+```json
+{
+  "action": "send_message",
+  "type": "text",
+  "jid": "feishu:oc_xxx",
+  "content": "Your message text here"
+}
+```
+
+### Sending Images
+
+To send an image to a chat, first save the image to your workspace, then create an IPC instruction:
+
+```json
+{
+  "action": "send_message",
+  "type": "image",
+  "jid": "feishu:oc_xxx",
+  "content": "/workspace/group/your_image.png"
+}
+```
+
+**Important**:
+- The image file must be saved to your workspace first
+- Use the absolute path to the image file
+- The `jid` should be in the format `feishu:oc_xxx` for Feishu chats
+- Do NOT try to send images by calling APIs directly - always use this IPC mechanism
+
+---
+
 ## Global Memory
 
 You can read and write to `/workspace/project/groups/global/CLAUDE.md` for facts that should apply to all groups. Only update global memory when explicitly asked to "remember this globally" or similar.
@@ -211,3 +247,42 @@ When scheduling tasks for other groups, use the `target_group_jid` parameter wit
 - `schedule_task(prompt: "...", schedule_type: "cron", schedule_value: "0 9 * * 1", target_group_jid: "120363336345536173@g.us")`
 
 The task will run in that group's context with access to their files and memory.
+
+---
+
+## Sending Images to Feishu
+
+To send images to a Feishu group chat, use the `routeOutboundImage` function from the router module.
+
+### API
+
+```typescript
+import { routeOutboundImage } from './router.js';
+
+// Send an image to a Feishu chat
+await routeOutboundImage(
+  channels,           // Array of Channel instances
+  'feishu:oc_xxx',  // JID of the Feishu chat
+  imageBuffer       // Buffer containing the image data
+);
+```
+
+### Example Usage
+
+```typescript
+import { routeOutboundImage } from './router.js';
+import { readFileSync } from 'fs';
+
+// Read image file
+const imageBuffer = readFileSync('/path/to/screenshot.png');
+
+// Send to Feishu
+await routeOutboundImage(channels, 'feishu:oc_141db11eed2622f8ff8cb0cee3c58b10', imageBuffer);
+```
+
+### Important Notes
+
+1. **Use the official API**: Always use `routeOutboundImage` from `./router.js` instead of creating your own implementation.
+2. **JID Format**: Feishu JIDs should be in the format `feishu:oc_xxx`.
+3. **Image Format**: The function accepts a `Buffer` containing any standard image format (PNG, JPEG, etc.).
+4. **Error Handling**: The function will throw if no channel supports the JID or if sending fails.

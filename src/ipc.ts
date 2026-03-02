@@ -17,6 +17,7 @@ import { RegisteredGroup } from './types.js';
 
 export interface IpcDeps {
   sendMessage: (jid: string, text: string) => Promise<void>;
+  sendImage: (jid: string, imageBuffer: Buffer) => Promise<void>;
   registeredGroups: () => Record<string, RegisteredGroup>;
   registerGroup: (jid: string, group: RegisteredGroup) => void;
   syncGroupMetadata: (force: boolean) => Promise<void>;
@@ -170,6 +171,8 @@ export async function processTaskIpc(
     trigger?: string;
     requiresTrigger?: boolean;
     containerConfig?: RegisteredGroup['containerConfig'];
+    // For send_message
+    content?: string;
   },
   sourceGroup: string, // Verified identity from IPC directory
   isMain: boolean, // Verified from directory path
@@ -323,6 +326,58 @@ export async function processTaskIpc(
         }
       }
       break;
+
+    case 'send_message': {
+      // Send message or image to a chat
+      if (data.jid && data.type) {
+        const targetJid = data.jid as string;
+        const messageType = data.type as 'text' | 'image';
+        const content = data.content as string;
+
+        // Authorization: verify this group can send to this chatJid
+        const targetGroup = registeredGroups[targetJid];
+        if (
+          isMain ||
+          (targetGroup && targetGroup.folder === sourceGroup)
+        ) {
+          try {
+            if (messageType === 'image') {
+              // Send image using the IPC deps
+              const fs = await import('fs');
+              const imageBuffer = fs.readFileSync(content);
+              await deps.sendImage(targetJid, imageBuffer);
+              logger.info(
+                { jid: targetJid, sourceGroup, path: content },
+                'Image sent via IPC',
+              );
+            } else {
+              // Send text message
+              await deps.sendMessage(targetJid, content);
+              logger.info(
+                { jid: targetJid, sourceGroup },
+                'Message sent via IPC',
+              );
+            }
+          } catch (err) {
+            logger.error(
+              { err, jid: targetJid, sourceGroup, type: messageType },
+              'Error sending message via IPC',
+            );
+          }
+        } else {
+          logger.warn(
+            { jid: targetJid, sourceGroup },
+            'Unauthorized send_message attempt blocked',
+          );
+        }
+      } else {
+        logger.warn(
+          { data },
+          'Invalid send_message request - missing required fields',
+        );
+      }
+      break;
+    }
 
     case 'refresh_groups':
       // Only main group can request a refresh
