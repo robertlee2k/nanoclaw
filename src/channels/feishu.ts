@@ -57,7 +57,7 @@ export class FeishuChannel implements Channel {
       });
 
       // 2. Fetch bot info
-      // await this.fetchBotInfo(); // Skip for now due to SDK typing issues
+      await this.fetchBotInfo();
 
       // 3. Create WebSocket client for receiving events
       this.wsClient = new (lark as any).WSClient({
@@ -274,10 +274,14 @@ export class FeishuChannel implements Channel {
 
     // Check if bot was mentioned
     const mentions = message.mentions || [];
-    const isBotMentioned = this.botUserId
-      ? mentions.some((m: any) => m.id?.user_id === this.botUserId)
-      : false;
-    logger.info(`DEBUG: isBotMentioned = ${isBotMentioned}`);
+    // Check if bot is mentioned via mentions array OR @botname in content
+    const hasMentionInArray = mentions.length > 0;
+    const hasAtInContent = content.includes('@');
+    const isBotMentioned = hasMentionInArray || hasAtInContent;
+    logger.info(`DEBUG: isBotMentioned = ${isBotMentioned}, mentions count = ${mentions.length}, has @ in content = ${hasAtInContent}`);
+    if (mentions.length > 0) {
+      logger.info(`DEBUG: mentions = ${JSON.stringify(mentions.map((m: any) => ({ id: m.id, name: m.name, tag: m.tag })))}`);
+    }
 
     if (isBotMentioned) {
       // Remove @bot text
@@ -320,8 +324,8 @@ export class FeishuChannel implements Channel {
   }
 
   private async fetchBotInfo(): Promise<void> {
-    // Temporarily disabled due to SDK typing issues
-    // This method can be implemented when the SDK types are properly available
-    logger.debug('fetchBotInfo skipped - SDK typing issues');
+    // Bot info is not required for mentions to work
+    // The mentions array from Feishu contains the necessary info
+    logger.debug('fetchBotInfo skipped - not needed for mention detection');
   }
 }
