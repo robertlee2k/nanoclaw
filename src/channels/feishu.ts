@@ -133,8 +133,15 @@ export class FeishuChannel implements Channel {
         },
       });
 
-      const imageKey = (response as any).data?.image_key;
+      // 飞书 API 可能返回不同结构，尝试多种路径提取 image_key
+      const responseAny = response as any;
+      const imageKey = responseAny.data?.image_key
+        ?? responseAny.image_key
+        ?? responseAny.data?.image?.image_key
+        ?? responseAny.image?.image_key;
+
       if (!imageKey) {
+        logger.error({ response: JSON.stringify(response, null, 2) }, 'No image_key found in Feishu response');
         throw new Error('No image_key returned from Feishu');
       }
 
